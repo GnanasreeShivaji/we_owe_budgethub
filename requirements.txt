@@ -1,0 +1,13 @@
+Flask==3.1.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Flask-WTF==1.2.2
+WTForms==3.2.1
+email-validator==2.2.0
+python-dotenv==1.0.1
+
+# --- Testing (dev only) ---
+pytest==8.3.4
+
+# --- PostgreSQL driver (uncomment when moving off SQLite for Sprint 2+) ---
+# psycopg2-binary==2.9.10

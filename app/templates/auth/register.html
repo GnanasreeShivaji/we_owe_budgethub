@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Sign up{% endblock %}
+{% block content %}
+<section class="auth">
+  <div class="card receipt">
+    <h1>Create your account</h1>
+    <p class="sub">Track shared expenses without the awkward maths.</p>
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+      {{ field(form.name) }}
+      {{ field(form.email) }}
+      {{ field(form.password, hint="8+ chars with upper, lower, number and a special character.") }}
+      {{ field(form.confirm) }}
+      <button class="btn btn-block" type="submit">Create account</button>
+    </form>
+    <p class="altrow">Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a></p>
+  </div>
+</section>
+{% endblock %}

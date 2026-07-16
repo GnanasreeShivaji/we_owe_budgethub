@@ -1,0 +1,8 @@
+{% macro field(f, hint="", type="") %}
+  <div class="field">
+    {{ f.label }}
+    {% if type %}{{ f(type=type) }}{% else %}{{ f() }}{% endif %}
+    {% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+    {% for e in f.errors %}<span class="err">{{ e }}</span>{% endfor %}
+  </div>
+{% endmacro %}

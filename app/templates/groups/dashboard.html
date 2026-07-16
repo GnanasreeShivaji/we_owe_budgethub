@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Your groups{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>Your groups</h1>
+    <p>Flatmates, trips, project teams — each keeps its own expense log.</p>
+  </div>
+  <button class="btn" type="button" data-toggle="#create-panel">New group</button>
+</div>
+
+<div class="panel" id="create-panel" hidden>
+  <h2>Create a group</h2>
+  <form method="post" action="{{ url_for('groups.create_group') }}" novalidate>
+    {{ form.hidden_tag() }}
+    {{ field(form.name) }}
+    {{ field(form.description, hint="Optional — e.g. 'Flat 4B, Summer 2026'.") }}
+    <button class="btn" type="submit">Create group</button>
+    <button class="btn btn-ghost" type="button" data-toggle="#create-panel">Cancel</button>
+  </form>
+</div>
+
+{% if groups %}
+  <div class="group-grid">
+    {% for g in groups %}
+      {% set role = g.member_role(current_user) %}
+      <a class="group-card" href="{{ url_for('groups.view_group', group_id=g.id) }}">
+        <h3>{{ g.name }}</h3>
+        <div class="desc">{{ g.description or "No description" }}</div>
+        <div class="meta">
+          <span class="tag {{ 'tag-admin' if role == 'admin' else 'tag-member' }}">{{ role }}</span>
+          {{ g.memberships|length }} member{{ '' if g.memberships|length == 1 else 's' }}
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty">
+    <p>No groups yet. Create your first one to start splitting expenses.</p>
+    <button class="btn" type="button" data-toggle="#create-panel">Create a group</button>
+  </div>
+{% endif %}
+{% endblock %}

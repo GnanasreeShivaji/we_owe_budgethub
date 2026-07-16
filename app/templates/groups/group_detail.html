@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ group.name }}{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="{{ url_for('groups.dashboard') }}">Groups</a> / {{ group.name }}</div>
+
+<div class="grouphead">
+  <div>
+    <h1>{{ group.name }}</h1>
+    {% if group.description %}<p class="desc">{{ group.description }}</p>{% endif %}
+  </div>
+  {% if is_admin %}
+  <div class="rowactions">
+    <button class="btn btn-ghost btn-sm" type="button" data-toggle="#edit-panel">Edit</button>
+    <form method="post" action="{{ url_for('groups.delete_group', group_id=group.id) }}"
+          data-confirm="Delete '{{ group.name }}'? This removes the group and all its members.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-danger btn-sm" type="submit">Delete group</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+{% if is_admin %}
+<div class="panel" id="edit-panel" hidden>
+  <h2>Edit group details</h2>
+  <form method="post" action="{{ url_for('groups.edit_group', group_id=group.id) }}" novalidate>
+    {{ edit_form.hidden_tag() }}
+    {{ field(edit_form.name) }}
+    {{ field(edit_form.description) }}
+    <button class="btn" type="submit">Save changes</button>
+    <button class="btn btn-ghost" type="button" data-toggle="#edit-panel">Cancel</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Invite a member</h2>
+  <form method="post" action="{{ url_for('groups.invite_member', group_id=group.id) }}" novalidate>
+    {{ invite_form.hidden_tag() }}
+    {{ field(invite_form.email, hint="Registered users are added instantly; others get an invite email.") }}
+    {{ field(invite_form.role) }}
+    <button class="btn" type="submit">Send invite</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="section-title expense-heading">
+  <span>Expenses</span>
+  <a class="btn btn-sm" href="{{ url_for('expenses.create_expense', group_id=group.id) }}">Add expense</a>
+</div>
+{% if expenses %}
+<table class="members">
+  <thead><tr><th>Expense</th><th>Date</th><th>Paid by</th><th>Amount</th><th></th></tr></thead>
+  <tbody>
+  {% for expense in expenses %}
+    <tr>
+      <td><div class="name">{{ expense.title }}</div><span class="email">{{ expense.category }}{% if expense.notes %} · {{ expense.notes }}{% endif %}</span></td>
+      <td>{{ expense.expense_date.strftime('%d %b %Y') }}</td>
+      <td>{{ expense.paid_by.name }}</td>
+      <td><strong>€{{ '%.2f'|format(expense.amount) }}</strong></td>
+      <td class="actions">
+        {% if expense.receipt_filename %}<a class="btn btn-ghost btn-sm" href="{{ url_for('expenses.receipt', group_id=group.id, expense_id=expense.id) }}">Receipt</a>{% endif %}
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('expenses.edit_expense', group_id=group.id, expense_id=expense.id) }}">Edit</a>
+        {% if expense.paid_by_id == current_user.id or is_admin %}
+        <form method="post" action="{{ url_for('expenses.delete_expense', group_id=group.id, expense_id=expense.id) }}" data-confirm="Delete this expense?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td colspan="5" class="split-summary">
+        <strong>{{ expense.split_method|title }} split:</strong>
+        {% for split in expense.splits %}{{ split.user.name }} €{{ '%.2f'|format(split.amount) }}{% if not loop.last %} · {% endif %}{% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty">No expenses yet. Add the first group expense.</div>
+{% endif %}
+
+<div class="section-title">Members</div>
+<table class="members">
+  <thead>
+    <tr><th>Member</th><th>Role</th>{% if is_admin %}<th></th>{% endif %}</tr>
+  </thead>
+  <tbody>
+    {% for m in memberships %}
+      <tr>
+        <td>
+          <div class="name">{{ m.user.name }}{% if m.user_id == group.owner_id %} · owner{% endif %}</div>
+          <span class="email">{{ m.user.email }}</span>
+        </td>
+        <td><span class="tag {{ 'tag-admin' if m.role == 'admin' else 'tag-member' }}">{{ m.role }}</span></td>
+        {% if is_admin %}
+        <td class="actions">
+          {% if m.user_id != group.owner_id %}
+            <form method="post" action="{{ url_for('groups.change_role', group_id=group.id, user_id=m.user_id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-ghost btn-sm" type="submit">
+                {{ 'Make member' if m.role == 'admin' else 'Make admin' }}
+              </button>
+            </form>
+            <form method="post" action="{{ url_for('groups.remove_member', group_id=group.id, user_id=m.user_id) }}"
+                  data-confirm="Remove {{ m.user.name }} from this group?">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-danger btn-sm" type="submit">Remove</button>
+            </form>
+          {% else %}
+            <span class="email">—</span>
+          {% endif %}
+        </td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    <!----
+    {% for inv in pending %}
+      <tr class="pending">
+        <td>{{ inv.email }} <span class="email">(invite sent)</span></td>
+        <td><span class="tag tag-member">{{ inv.role }}</span></td>
+        {% if is_admin %}<td></td>{% endif %}
+      </tr>
+    {% endfor %}
+    --->
+    {% for inv in pending %}
+  <tr class="pending">
+    <td>
+      {{ inv.email }}
+      <span class="email">(pending invitation)</span>
+    </td>
+
+    <td>
+      <span class="tag {{ 'tag-admin' if inv.role == 'admin' else 'tag-member' }}">
+        {{ inv.role }}
+      </span>
+    </td>
+
+    {% if is_admin %}
+    <td class="actions">
+      <form
+        method="post"
+        action="{{ url_for(
+          'groups.cancel_invitation',
+          group_id=group.id,
+          invitation_id=inv.id
+        ) }}"
+        data-confirm="Cancel this pending invitation?"
+      >
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ csrf_token() }}"
+        >
+
+        <button
+          class="btn btn-danger btn-sm"
+          type="submit"
+        >
+          Cancel invite
+        </button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

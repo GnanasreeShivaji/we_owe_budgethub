@@ -1,0 +1,22 @@
+[
+  {
+    "sprint": "Sprint 1",
+    "story_points": 26,
+    "chart": "sprint-1-burndown.svg"
+  },
+  {
+    "sprint": "Sprint 2",
+    "story_points": 63,
+    "chart": "sprint-2-burndown.svg"
+  },
+  {
+    "sprint": "Sprint 3",
+    "story_points": 21,
+    "chart": "sprint-3-burndown.svg"
+  },
+  {
+    "sprint": "Sprint 4",
+    "story_points": 21,
+    "chart": "sprint-4-burndown.svg"
+  }
+]

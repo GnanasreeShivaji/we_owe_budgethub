@@ -1,0 +1,18 @@
+{
+  "Sprint 1": {
+    "sessions": ["Start", "Hour 1", "Hour 2", "Hour 3", "Hour 4"],
+    "tasks": {
+      "US-01 | User Registration & Login": [4, 3, 2, 1, 0],
+      "US-02 | Group Creation & Management": [12, 12, 12, 12, 12]
+    }
+  },
+  "Sprint 2": {
+    "sessions": ["Start"]
+  },
+  "Sprint 3": {
+    "sessions": ["Start"]
+  },
+  "Sprint 4": {
+    "sessions": ["Start"]
+  }
+}

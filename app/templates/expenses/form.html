@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ 'Edit expense' if expense else 'Add expense' }}{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="{{ url_for('groups.view_group', group_id=group.id) }}">{{ group.name }}</a> / {{ 'Edit expense' if expense else 'Add expense' }}</div>
+<div class="card expense-form">
+  <h1>{{ 'Edit expense' if expense else 'Add an expense' }}</h1>
+  <p class="sub">Record what was paid for this group.</p>
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {{ form.hidden_tag() }}
+    {{ field(form.title) }}
+    {{ field(form.amount, type="number") }}
+    {{ field(form.category) }}
+    {{ field(form.expense_date) }}
+    {{ field(form.notes) }}
+    {{ field(form.receipt, hint="JPG, PNG, GIF, WebP or PDF; maximum 5 MB.") }}
+    {% if expense and expense.receipt_filename %}<p class="hint">Current receipt: {{ expense.receipt_original_name }}</p>{% endif %}
+
+    <div class="split-panel" id="split-panel">
+      <h2>Split this expense</h2>
+      {{ field(form.split_method) }}
+      <p class="hint" id="split-hint">Select the people included in this expense.</p>
+      <div class="split-members">
+      {% for membership in memberships %}
+        {% set uid = membership.user_id %}
+        <div class="split-member">
+          <label class="check">
+            <input type="checkbox" name="participant_{{ uid }}" value="1"
+                   {% if uid in selected_ids %}checked{% endif %}>
+            <span>{{ membership.user.name }}</span>
+          </label>
+          <input class="split-value" type="number" min="0" step="0.01"
+                 name="split_value_{{ uid }}"
+                 value="{{ split_values.get('split_value_' ~ uid, '') or '' }}"
+                 aria-label="Split value for {{ membership.user.name }}">
+          <span class="split-unit"></span>
+        </div>
+      {% endfor %}
+      </div>
+      <div class="split-preview" id="split-preview" aria-live="polite"></div>
+    </div>
+
+    <button class="btn" type="submit">{{ 'Save changes' if expense else 'Save expense' }}</button>
+    <a class="btn btn-ghost" href="{{ url_for('groups.view_group', group_id=group.id) }}">Cancel</a>
+  </form>
+</div>
+<script src="{{ url_for('static', filename='js/expense-split.js') }}"></script>
+{% endblock %}
