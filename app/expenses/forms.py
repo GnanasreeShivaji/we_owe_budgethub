@@ -11,17 +11,24 @@ class ExpenseForm(FlaskForm):
     amount = DecimalField(
         "Amount", places=2, validators=[InputRequired(), NumberRange(min=0.01, max=9999999999)]
     )
+    currency = SelectField(
+        "Currency",
+        choices=[("EUR", "EUR · Euro (€)"), ("USD", "USD · US Dollar ($)"),
+                 ("INR", "INR · Indian Rupee (₹)"), ("GBP", "GBP · Pound (£)")],
+        validators=[Optional()],
+    )
     category = SelectField(
         "Category",
         choices=[
-            ("Food", "Food"),
+            ("Eating out", "Eating out"),
             ("Groceries", "Groceries"),
-            ("Transport", "Transport"),
-            ("Utilities", "Utilities"),
-            ("Entertainment", "Entertainment"),
-            ("Other", "Other"),
+            ("Rent", "Rent"),
+            ("Bills", "Bills"),
+            ("Money sent home", "Money sent home"),
+            ("Other expenses", "Other expenses"),
         ],
         validators=[DataRequired()],
+        validate_choice=False,  # accept legacy category values on existing records
     )
     expense_date = DateField("Date", validators=[DataRequired()])
     notes = TextAreaField("Notes", validators=[Optional(), Length(max=500)])
@@ -36,6 +43,7 @@ class ExpenseForm(FlaskForm):
             ("exact", "Exact amounts"),
             ("percentage", "Percentages"),
             ("shares", "Shares"),
+            ("receipt", "Receipt item checklist"),
         ],
         validators=[DataRequired()],
     )

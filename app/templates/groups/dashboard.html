@@ -4,6 +4,7 @@
 {% block content %}
 <div class="pagehead">
   <div>
+    <span class="eyebrow">YOUR SHARED SPACES</span>
     <h1>Your groups</h1>
     <p>Flatmates, trips, project teams — each keeps its own expense log.</p>
   </div>
@@ -26,6 +27,7 @@
     {% for g in groups %}
       {% set role = g.member_role(current_user) %}
       <a class="group-card" href="{{ url_for('groups.view_group', group_id=g.id) }}">
+        <span class="group-card-icon">{{ g.name[:1]|upper }}</span>
         <h3>{{ g.name }}</h3>
         <div class="desc">{{ g.description or "No description" }}</div>
         <div class="meta">

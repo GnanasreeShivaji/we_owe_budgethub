@@ -50,6 +50,11 @@ def test_equal_split(client, app, make_user):
     gid, owner, member = _group_with_two_members(client, app, make_user)
     response = _post_split(client, gid, owner, member, "equal")
     assert b"Expense saved successfully" in response.data
+    assert b"Member contribution" in response.data
+    assert b"contribution-pie" in response.data
+    assert b"contribution-legend" in response.data
+    assert b"Percentage" in response.data
+    assert response.data.count(b"50.0%") == 4  # legend and bar label for both members
     assert _amounts(app) == [Decimal("6.00"), Decimal("6.00")]
 
 

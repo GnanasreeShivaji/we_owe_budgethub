@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Monthly budget{% endblock %}
+{% block body_class %}budget-theme{% endblock %}
+{% block content %}
+<div class="budget-shell">
+  <header class="budget-hero">
+    <div>
+      <span class="eyebrow">STUDENT MONEY DASHBOARD</span>
+      <h1>Your monthly budget</h1>
+      <p>Recurring bills, shared costs, and everyday spending—all in one place.</p>
+    </div>
+    <form class="month-picker budget-month-picker" method="get">
+      <label for="month-view">Month</label>
+      <input id="month-view" type="month" name="month" value="{{ selected_month }}">
+      <button class="btn btn-sm" type="submit">Update</button>
+    </form>
+  </header>
+
+  <section class="metric-grid" aria-label="Monthly totals">
+    <article class="metric metric-income"><span>Monthly income</span><strong>{{ currency_symbol }}{{ '%.2f'|format(income_total) }}</strong><small>Money coming in</small></article>
+    <article class="metric metric-spent"><span>Spent so far</span><strong>{{ currency_symbol }}{{ '%.2f'|format(total_spent) }}</strong><small>Includes recurring bills</small></article>
+    <article class="metric metric-save"><span>Optional savings goal</span><strong>{{ currency_symbol }}{{ '%.2f'|format(savings_total) }}</strong><small>{{ currency_symbol }}{{ '%.2f'|format(money_after_savings) }} left if you save this</small></article>
+    <article class="metric {{ 'metric-negative' if money_left < 0 else 'metric-left' }}"><span>Available balance</span><strong>{{ currency_symbol }}{{ '%.2f'|format(money_left) }}</strong><small>Income minus spending · savings included</small></article>
+  </section>
+  {% if summary %}
+  <section class="balance-formula" aria-label="Available balance calculation">
+    <div><span>Available balance</span><strong>{{ currency_symbol }}{{ '%.2f'|format(income_total) }} income − {{ currency_symbol }}{{ '%.2f'|format(total_spent) }} spent = {{ currency_symbol }}{{ '%.2f'|format(money_left) }}</strong></div>
+    <div><span>If you choose to save your goal</span><strong>{{ currency_symbol }}{{ '%.2f'|format(money_left) }} − {{ currency_symbol }}{{ '%.2f'|format(savings_total) }} optional savings = {{ currency_symbol }}{{ '%.2f'|format(money_after_savings) }}</strong></div>
+  </section>
+  {% endif %}
+
+  {% set alerts = categories|selectattr('level', 'in', ['notice', 'warning', 'danger'])|list %}
+  {% if alerts %}
+  <section class="budget-alerts" aria-label="Budget warnings">
+    {% for item in alerts %}
+      <div class="budget-alert alert-{{ item.level }}">
+        <span class="alert-dot"></span>
+        <span><strong>{{ item.name }}</strong> has used {{ '%.0f'|format(item.display_percentage) }}% of its {{ currency_symbol }}{{ '%.2f'|format(item.planned) }} budget{% if item.remaining < 0 %} · {{ currency_symbol }}{{ '%.2f'|format(-item.remaining) }} over budget{% endif %}.</span>
+      </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <div class="budget-main-grid">
+    <section class="budget-panel spending-progress-panel" aria-label="Spending overview">
+      <div class="panel-heading"><div><span class="eyebrow">LIVE TRACKER</span><h2>Spending by category</h2></div><span class="status-pill">{{ selected_month }}</span></div>
+      <div class="category-progress-list">
+      {% for item in categories %}
+        <article class="category-progress">
+          <div class="category-progress-head">
+            <div><strong>{{ item.name }}</strong><small>{{ currency_symbol }}{{ '%.2f'|format(item.actual) }} of {{ currency_symbol }}{{ '%.2f'|format(item.planned) }}</small></div>
+            <div class="category-head-actions"><span class="percent percent-{{ item.level }}">{{ '%.0f'|format(item.display_percentage) }}%{% if item.remaining < 0 %} max{% endif %}</span>
+              <details class="category-limit-edit">
+                <summary aria-label="Edit {{ item.name }} limit">Edit limit</summary>
+                <form method="post" action="{{ url_for('budgets.update_category_limit', category_key=item.key) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ selected_month }}">
+                  <label for="limit-{{ item.key }}">Monthly limit</label>
+                  <div><span>{{ currency_symbol }}</span><input id="limit-{{ item.key }}" name="amount" type="number" min="0" step="0.01" value="{{ '%.2f'|format(item.planned) }}"><button class="btn btn-sm" type="submit">Save</button></div>
+                </form>
+              </details>
+            </div>
+          </div>
+          <div class="progress-track" role="progressbar" aria-label="{{ item.name }} budget used" aria-valuenow="{{ item.bar_percentage }}" aria-valuemin="0" aria-valuemax="100">
+            <span class="progress-fill fill-{{ item.level }}" style="width:{{ item.bar_percentage }}%"></span>
+          </div>
+          <div class="category-meta"><span>Personal/fixed {{ currency_symbol }}{{ '%.2f'|format(item.personal) }}</span><span>Group splits {{ currency_symbol }}{{ '%.2f'|format(item.group) }}</span><span class="{{ 'text-danger' if item.remaining < 0 else '' }}">{{ currency_symbol }}{{ '%.2f'|format(item.remaining) }} left</span></div>
+        </article>
+      {% endfor %}
+      </div>
+    </section>
+
+    <section class="budget-panel chart-panel">
+      <div class="panel-heading"><div><span class="eyebrow">BREAKDOWN</span><h2>Where your money went</h2></div></div>
+      {% if total_spent > 0 %}
+      <div class="donut-wrap">
+        <svg class="budget-donut" viewBox="0 0 42 42" role="img" aria-label="Spending category pie chart">
+          <circle class="donut-base" cx="21" cy="21" r="15.9155" pathLength="100"></circle>
+          {% set chart = namespace(offset=0) %}
+          {% for item in chart_categories %}
+            {% set pct = item.chart_percentage %}
+            <circle class="donut-segment donut-color-{{ loop.index0 }}" cx="21" cy="21" r="15.9155" pathLength="100" stroke-dasharray="{{ pct }} {{ 100-pct }}" stroke-dashoffset="{{ -chart.offset }}" tabindex="0"><title>{{ item.name }}: {{ currency_symbol }}{{ '%.2f'|format(item.actual) }} spent ({{ item.display_percentage }}% of total spending)</title></circle>
+            {% set chart.offset = chart.offset + pct %}
+          {% endfor %}
+        </svg>
+        <div class="donut-center"><strong>{{ currency_symbol }}{{ '%.0f'|format(total_spent) }}</strong><span>total spent</span></div>
+      </div>
+      <div class="chart-legend">
+        {% for item in chart_categories %}<div title="{{ currency_symbol }}{{ '%.2f'|format(item.actual) }} spent on {{ item.name }}"><span class="legend-dot donut-bg-{{ loop.index0 }}"></span><span>{{ item.name }}</span><strong>{{ item.display_percentage }}% · {{ currency_symbol }}{{ '%.2f'|format(item.actual) }}</strong></div>{% endfor %}
+      </div>
+      {% else %}
+      <div class="chart-empty"><span>◎</span><p>Your chart will appear after you add spending.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="budget-action-grid">
+    <section class="budget-panel">
+      <div class="panel-heading"><div><span class="eyebrow">MONTHLY TEMPLATES</span><h2>Recurring bills</h2></div><strong class="panel-total">{{ currency_symbol }}{{ '%.2f'|format(recurring_total) }} paid</strong></div>
+      <p class="panel-copy">Confirm a bill after it is paid. Templates are never counted as historical spending by themselves.</p>
+      <form class="recurring-form" method="post" action="{{ url_for('budgets.add_recurring_bill') }}" novalidate>
+        {{ recurring_form.hidden_tag() }}<input type="hidden" name="month" value="{{ selected_month }}">
+        {{ field(recurring_form.bill_type) }}{{ field(recurring_form.description) }}{{ field(recurring_form.amount, type="number") }}
+        <button class="btn" type="submit">Add monthly bill</button>
+      </form>
+      {% if recurring_bills %}<div class="bill-list">
+        {% for bill in recurring_bills %}<div class="bill-row">
+          <span class="bill-icon">{{ '♥' if bill.bill_type == 'Health insurance' else '●' }}</span>
+          <div><strong>{{ bill.description }}</strong><small>{{ bill.bill_type }} · every month</small></div>
+          <strong>{{ currency_symbol }}{{ '%.2f'|format(bill.amount) }}</strong>
+          <div class="bill-actions">
+            {% if bill.id in recurring_occurrences %}<form method="post" action="{{ url_for('budgets.unconfirm_recurring_bill', bill_id=bill.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ selected_month }}"><button class="btn btn-ghost btn-sm" type="submit">✓ Paid</button></form>{% else %}<form method="post" action="{{ url_for('budgets.confirm_recurring_bill', bill_id=bill.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ selected_month }}"><button class="btn btn-sm" type="submit">Mark paid</button></form>{% endif %}
+            <details class="bill-edit"><summary>Edit</summary><form method="post" action="{{ url_for('budgets.edit_recurring_bill', bill_id=bill.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ selected_month }}">
+              <label>Bill type<select name="bill_type">{% for value, label in recurring_form.bill_type.choices %}<option value="{{ value }}" {% if value == bill.bill_type %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+              <label>Description<input name="description" maxlength="120" value="{{ bill.description }}" required></label>
+              <label>Monthly amount<input name="amount" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(bill.amount) }}" required></label>
+              <button class="btn btn-sm" type="submit">Save bill</button>
+            </form></details>
+            <form method="post" action="{{ url_for('budgets.delete_recurring_bill', bill_id=bill.id) }}" data-confirm="Delete recurring bill '{{ bill.description }}'? This removes it from every month."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ selected_month }}"><button class="icon-delete" type="submit" aria-label="Remove {{ bill.description }}">×</button></form>
+          </div>
+        </div>{% endfor %}
+      </div>{% endif %}
+    </section>
+
+    <section class="budget-panel">
+      <div class="panel-heading"><div><span class="eyebrow">QUICK ENTRY</span><h2>Add personal spending</h2></div></div>
+      <p class="panel-copy">Group expenses and splits are picked up automatically—use this for your own payments.</p>
+      <form class="quick-spend-form" method="post" action="{{ url_for('budgets.add_spending') }}" novalidate>
+        {{ spending_form.hidden_tag() }}<input type="hidden" name="month" value="{{ selected_month }}">
+        {{ field(spending_form.description) }}{{ field(spending_form.amount, type="number") }}
+        {{ field(spending_form.category) }}{{ field(spending_form.expense_date) }}
+        <button class="btn" type="submit">Add spending</button>
+      </form>
+    </section>
+  </div>
+
+  <section class="budget-panel activity-panel">
+    <div class="panel-heading"><div><span class="eyebrow">FULL CONTEXT</span><h2>Spending activity</h2></div></div>
+    <p class="panel-copy">Descriptions from personal and split expenses show exactly where you spent.</p>
+    {% if spending_entries or group_activity %}
+    <div class="activity-list">
+      {% for entry in spending_entries %}<div class="activity-row">
+        <span class="activity-icon">P</span><div><strong>{{ entry.description }}</strong><small>{{ entry.category }} · Personal · {{ entry.expense_date.strftime('%d %b') }}</small></div><strong>−{{ currency_symbol }}{{ '%.2f'|format(entry.amount) }}</strong>
+        <form method="post" action="{{ url_for('budgets.delete_spending', entry_id=entry.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="icon-delete" type="submit" aria-label="Delete {{ entry.description }}">×</button></form>
+      </div>{% endfor %}
+      {% for expense, share in group_activity %}<div class="activity-row">
+        <span class="activity-icon activity-group">S</span><div><strong>{{ expense.title }}</strong><small>{{ expense.category }} · Split in {{ expense.group.name }} · {{ expense.expense_date.strftime('%d %b') }}{% if expense.notes %} · {{ expense.notes }}{% endif %}</small></div><strong>−{{ currency_symbol }}{{ '%.2f'|format(share) }}</strong><span></span>
+      </div>{% endfor %}
+    </div>
+    {% else %}<div class="activity-empty">No spending recorded for this month yet.</div>{% endif %}
+  </section>
+
+  <details class="budget-panel budget-settings" {% if not budget %}open{% endif %}>
+    <summary><span><span class="eyebrow">MONTHLY PLAN</span><strong>{{ 'Adjust budget limits' if budget else 'Set up your budget' }}</strong></span><span>⌄</span></summary>
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}<input type="hidden" name="month" value="{{ selected_month }}">
+      <div class="budget-basics">{{ field(form.income_sources, hint="One per line, for example: Student job: 900.00") }}{{ field(form.savings_target, type="number") }}</div>
+      <h3>Monthly category limits</h3>
+      <div class="budget-fields">{{ field(form.transport_budget, type="number") }}{{ field(form.utilities_budget, type="number") }}{{ field(form.groceries_budget, type="number") }}{{ field(form.food_budget, type="number") }}{{ field(form.entertainment_budget, type="number") }}{{ field(form.other_budget, type="number") }}</div>
+      {% if summary %}<p class="panel-copy">Planned money not allocated: <strong>{{ currency_symbol }}{{ '%.2f'|format(summary[3]) }}</strong></p>{% endif %}
+      <button class="btn" type="submit">Save monthly plan</button>
+    </form>
+    <div class="budget-delete-zone">
+      <div><strong>Delete or start again</strong><p>Delete only the plan, or reset this month to remove the plan and your personal spending entries. Recurring bills and group splits stay.</p></div>
+      <div class="budget-danger-actions">{% if budget %}<form method="post" action="{{ url_for('budgets.delete_monthly_budget', month=selected_month) }}" data-confirm="Delete the budget plan for {{ selected_month }}? Your spending records will be kept.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger" type="submit">Delete budget only</button>
+      </form>{% endif %}<form method="post" action="{{ url_for('budgets.reset_month', month=selected_month) }}" data-confirm="Reset {{ selected_month }}? The monthly plan and all personal spending entries for this month will be deleted.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger" type="submit">Reset month</button>
+      </form></div>
+    </div>
+  </details>
+</div>
+{% endblock %}

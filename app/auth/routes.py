@@ -12,7 +12,9 @@ from flask import (
     render_template,
     request,
     url_for,
+    abort,
 )
+from time import time
 from flask_login import current_user, login_required, login_user, logout_user
 
 from .. import db
@@ -24,6 +26,10 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 CONFIRM_SALT = "email-confirm"
 RESET_SALT = "password-reset"
+
+
+def _login_attempts():
+    return current_app.extensions.setdefault("we_owe_login_attempts", {})
 
 
 def _send_confirmation(user: User) -> None:
@@ -102,16 +108,28 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         email = User.normalize_email(form.email.data)
+        key = (request.remote_addr or "unknown", email)
+        recent = [stamp for stamp in _login_attempts().get(key, []) if time() - stamp < 900]
+        if len(recent) >= 5:
+            flash("Too many login attempts. Try again in 15 minutes.", "error")
+            return render_template("auth/login.html", form=form), 429
         user = User.query.filter_by(email=email).first()
         if user is None:
+            _login_attempts()[key] = recent + [time()]
             flash("This email is not registered. Please sign up to log in.", "error")
             return render_template("auth/login.html", form=form)
 
+        if user.account_deleted:
+            flash("This account has been deleted.", "error")
+            return render_template("auth/login.html", form=form)
+
         if not user.check_password(form.password.data):
+            _login_attempts()[key] = recent + [time()]
             flash("Incorrect password. Please try again.", "error")
             return render_template("auth/login.html", form=form)
 
         login_user(user, remember=form.remember.data)
+        _login_attempts().pop(key, None)
         if not user.is_confirmed:
             flash("Reminder: please confirm your email from the link we sent.", "info")
 

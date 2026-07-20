@@ -54,3 +54,11 @@ class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False          # simplifies the pytest client
     MAIL_SUPPRESS_SEND = True
+
+
+class ProductionConfig(Config):
+    """Hardened defaults for HTTPS deployment."""
+    SESSION_COOKIE_SECURE = True
+    REMEMBER_COOKIE_SECURE = True
+    PREFERRED_URL_SCHEME = "https"
+    SECRET_KEY = os.environ.get("SECRET_KEY")

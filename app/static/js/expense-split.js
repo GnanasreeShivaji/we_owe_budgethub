@@ -7,11 +7,18 @@
   const rows = Array.from(panel.querySelectorAll(".split-member"));
   const preview = document.getElementById("split-preview");
   const hint = document.getElementById("split-hint");
+  const form = panel.closest("form");
+  const currencySelect = document.getElementById("currency");
+  const symbols = {EUR: "€", USD: "$", INR: "₹", GBP: "£"};
+  const currency = () => currencySelect
+    ? (symbols[currencySelect.value] || `${currencySelect.value} `)
+    : (form.dataset.currencySymbol || "€");
 
   function update() {
     const mode = method.value;
     const total = Number(amount.value || 0);
     const selected = rows.filter(row => row.querySelector("[type=checkbox]").checked);
+    const symbol = currency();
     const labels = {
       equal: "Equal split is calculated automatically.",
       exact: "Enter each person's exact amount; the total must match the expense.",
@@ -26,7 +33,7 @@
       const unit = row.querySelector(".split-unit");
       input.hidden = mode === "equal";
       input.disabled = !checked || mode === "equal";
-      unit.textContent = mode === "percentage" ? "%" : mode === "exact" ? "€" : "";
+      unit.textContent = mode === "percentage" ? "%" : mode === "exact" ? symbol : "";
     });
 
     if (!selected.length || !total) {
@@ -42,11 +49,12 @@
       calculated = values.map(value => sum ? total * value / sum : 0);
     } else calculated = values;
     preview.textContent = selected.map((row, index) =>
-      `${row.querySelector(".check span").textContent}: €${calculated[index].toFixed(2)}`
+      `${row.querySelector(".check span").textContent}: ${symbol}${calculated[index].toFixed(2)}`
     ).join(" · ");
   }
 
   panel.addEventListener("input", update);
   panel.addEventListener("change", update);
+  if (currencySelect) currencySelect.addEventListener("change", update);
   update();
 })();

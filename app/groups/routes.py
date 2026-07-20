@@ -21,6 +21,11 @@ from flask_login import current_user, login_required
 from .. import db
 from ..models import Group, Invitation, Membership, User
 from ..services.email import send_email
+from ..services.balances import calculate_group_balances
+from ..services.settlements import calculate_settlements
+from ..services.next_payer import recommend_next_payer
+from ..services.calculation_audit import audit_group_calculations
+from ..services.preferences import symbol_for
 from .forms import GroupForm, InviteForm
 
 groups_bp = Blueprint("groups", __name__, url_prefix="/groups")
@@ -74,7 +79,8 @@ def create_group():
             flash(f"You already have a group named '{name}'.", "error")
             return redirect(url_for("groups.dashboard"))
 
-        group = Group(name=name, description=(form.description.data or "").strip(), owner=current_user)
+        group = Group(name=name, description=(form.description.data or "").strip(),
+                      owner=current_user, currency=current_user.currency)
         db.session.add(group)
         db.session.flush()  # get group.id
         # Creator joins as admin
@@ -96,6 +102,16 @@ def view_group(group_id):
     group = _require_membership(group_id)
     memberships = sorted(group.memberships, key=lambda m: (m.role != Membership.ADMIN, m.user.name.lower()))
     pending = [i for i in group.invitations if i.status == Invitation.PENDING]
+    balances = calculate_group_balances(group)
+    calculation_audit = audit_group_calculations(group)
+    settlement_error = None
+    try:
+        if not calculation_audit["healthy"]:
+            raise ValueError("Settlement is paused until the calculation errors below are fixed.")
+        settlements = calculate_settlements(balances)
+    except ValueError as error:
+        settlements = []
+        settlement_error = str(error)
     return render_template(
         "groups/group_detail.html",
         group=group,
@@ -106,6 +122,12 @@ def view_group(group_id):
         edit_form=GroupForm(obj=group),
         Membership=Membership,
         expenses=sorted(group.expenses, key=lambda expense: expense.expense_date, reverse=True),
+        balances=balances,
+        settlements=settlements,
+        settlement_error=settlement_error,
+        next_payer=recommend_next_payer(group, symbol_for(group.currency)) if calculation_audit["healthy"] else None,
+        calculation_audit=calculation_audit,
+        currency_symbol=symbol_for(group.currency),
     )
 
 

@@ -2,7 +2,13 @@
 
 Implementation includes **US-01 (User Registration & Login)**,
 **US-02 (Group Creation & Management)**, **US-03 (Expense CRUD + receipts)**,
-and **US-04 (equal, exact, percentage and shares expense splitting)**.
+**US-04 (equal, exact, percentage and shares expense splitting)**, and
+**US-08 (collaborative shared shopping lists)**, and **US-09 (scheduled,
+tracked payment reminders)**, and **US-10 (spending reports, charts, verified
+totals, CSV/PDF export)**, plus **US-11 (data-backed spending insights and
+recommended actions)**, **US-12 (fair next-payer recommendations)**, and
+**US-15 (calculation auditing and safe transfer error handling)**. US-05 automatically derives each group member's
+balance from payments and saved splits.
 
 Stack (per the planning report): **Python / Flask** backend, **SQL** via
 SQLAlchemy (SQLite in dev, PostgreSQL-ready), **HTML + CSS + JavaScript**
@@ -18,6 +24,31 @@ pip install -r requirements.txt
 cp .env.example .env               # then set SECRET_KEY to a random string
 python run.py                      # http://127.0.0.1:5000
 ```
+
+To deliver payment reminders whose scheduled time has arrived, run this from
+cron or a deployment scheduler (the reminder center also has a manual button):
+
+```bash
+flask --app run dispatch-reminders
+```
+
+For continuous automatic delivery, run a separate worker process:
+
+```bash
+python -m app.reminders.worker
+```
+
+Production starts the two processes declared in `Procfile`: the Gunicorn web
+process and the reminder worker. Configure `SECRET_KEY`, `DATABASE_URL`, SMTP,
+and HTTPS in the deployment platform; never commit `.env`.
+
+Create a safe SQLite backup with:
+
+```bash
+python tools/backup_database.py
+```
+
+The Trello-ready Sprint 5 stories are in `docs/trello_user_stories.md`.
 
 The database (`instance/we_owe.db`) is created automatically on first run.
 With no SMTP configured, all emails (confirmation, password reset, invites)

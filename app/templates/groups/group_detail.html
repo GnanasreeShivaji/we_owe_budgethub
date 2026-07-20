@@ -6,8 +6,15 @@
 
 <div class="grouphead">
   <div>
+    <span class="eyebrow">GROUP DASHBOARD</span>
     <h1>{{ group.name }}</h1>
     {% if group.description %}<p class="desc">{{ group.description }}</p>{% endif %}
+  </div>
+  <div class="group-primary-actions">
+    <a class="btn btn-ghost" href="{{ url_for('shopping.view_list', group_id=group.id) }}">Shopping list <span class="action-count">{{ group.shopping_items|selectattr('is_purchased', 'equalto', false)|list|length }}</span></a>
+    <a class="btn btn-ghost" href="{{ url_for('reminders.view_reminders', group_id=group.id) }}">Reminders <span class="action-count">{{ group.payment_reminders|selectattr('status', 'equalto', 'scheduled')|list|length }}</span></a>
+    <a class="btn btn-ghost" href="{{ url_for('reports.spending_report', scope='group:' ~ group.id) }}">Report</a>
+    <a class="btn" href="{{ url_for('expenses.create_expense', group_id=group.id) }}">Add expense</a>
   </div>
   {% if is_admin %}
   <div class="rowactions">
@@ -44,6 +51,91 @@
 </div>
 {% endif %}
 
+<a class="shopping-preview" href="{{ url_for('shopping.view_list', group_id=group.id) }}">
+  <span class="shopping-preview-icon">✓</span><div><span class="eyebrow">SHARED CHECKLIST</span><strong>Group shopping list</strong><small>{{ group.shopping_items|selectattr('is_purchased', 'equalto', false)|list|length }} item(s) still needed · everyone can collaborate</small></div><span>Open list →</span>
+</a>
+
+<details class="calculation-health {{ 'healthy' if calculation_audit.healthy else 'has-errors' }}" id="calculation-health" {{ 'open' if not calculation_audit.healthy }}>
+  <summary><span class="calculation-health-icon">{{ '✓' if calculation_audit.healthy else '!' }}</span><div><strong>{{ 'Calculations verified' if calculation_audit.healthy else calculation_audit.errors|length ~ ' calculation issue(s) found' }}</strong><small>{{ calculation_audit.expense_count }} expenses · {{ calculation_audit.checked_payments }} payments · {{ calculation_audit.checked_splits }} shares checked</small></div><b>{{ 'Healthy' if calculation_audit.healthy else 'Action needed' }}</b></summary>
+  <div class="calculation-health-body">
+    {% if calculation_audit.healthy %}<p>Payment totals and split totals match every expense, and group balances add up to {{ currency_symbol }}0.00.</p>
+    {% else %}{% for error in calculation_audit.errors %}<article><div><strong>{{ error.title }}</strong><span>{{ error.detail }}</span></div>{% if error.expense %}<a class="btn btn-ghost btn-sm" href="{{ url_for('expenses.edit_expense', group_id=group.id, expense_id=error.expense.id) }}">Fix expense</a>{% endif %}</article>{% endfor %}{% endif %}
+  </div>
+</details>
+
+<div class="section-title">Group balances</div>
+<div class="balance-grid" aria-label="Current group balances">
+  {% for balance in balances %}
+  <div class="balance-card {{ 'balance-positive' if balance.net > 0 else 'balance-negative' if balance.net < 0 else 'balance-zero' }}">
+    <div class="balance-name">{{ balance.user.name }}</div>
+    <div class="balance-status">
+      {% if balance.net > 0 %}
+        Should receive <strong>{{ currency_symbol }}{{ '%.2f'|format(balance.net) }}</strong>
+      {% elif balance.net < 0 %}
+        Owes <strong>{{ currency_symbol }}{{ '%.2f'|format(-balance.net) }}</strong>
+      {% else %}
+        Settled up
+      {% endif %}
+    </div>
+    <div class="balance-detail">Paid {{ currency_symbol }}{{ '%.2f'|format(balance.paid) }} · Share {{ currency_symbol }}{{ '%.2f'|format(balance.owed) }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="section-title">Who should pay next?</div>
+{% if next_payer %}
+<section class="next-payer-card" aria-label="Next payer recommendation">
+  <div class="next-payer-avatar">{{ next_payer.user.name[:1]|upper }}</div>
+  <div class="next-payer-main"><span class="eyebrow">FAIR PAYMENT SUGGESTION</span><h2>{{ next_payer.user.name }} should pay next</h2><p>{{ next_payer.reason }}</p><small>Based on {{ next_payer.basis }} from saved group expenses. This is a suggestion—you can still choose any payer.</small></div>
+  <a class="btn" href="{{ url_for('expenses.create_expense', group_id=group.id) }}">Add next expense</a>
+  <details class="next-payer-proof"><summary>See the calculation</summary><div>{% for item in next_payer.positions %}<p><strong>{{ item.user.name }}</strong><span>Paid {{ currency_symbol }}{{ '%.2f'|format(item.paid) }} · Assigned {{ currency_symbol }}{{ '%.2f'|format(item.share) }}</span><b class="{{ 'behind' if item.gap > 0 else 'ahead' if item.gap < 0 else '' }}">{% if item.gap > 0 %}{{ currency_symbol }}{{ '%.2f'|format(item.gap) }} behind{% elif item.gap < 0 %}{{ currency_symbol }}{{ '%.2f'|format(-item.gap) }} ahead{% else %}Even{% endif %}</b></p>{% endfor %}</div></details>
+</section>
+{% else %}
+<div class="next-payer-empty"><strong>No recommendation yet</strong><span>Add the first shared expense. A suggestion will appear only after real payment history exists.</span></div>
+{% endif %}
+
+<div class="section-title" id="settlement-plan">Smart settlement plan</div>
+<div class="settlement-panel" aria-label="Recommended payments">
+  {% if settlement_error %}
+    <div class="settlement-error">{{ settlement_error }}</div>
+  {% elif settlements %}
+    <p class="settlement-intro">Make these payments to settle the group with fewer transfers:</p>
+    <ol class="settlement-list">
+      {% for settlement in settlements %}
+      <li>
+        <span class="settlement-person">{{ settlement.from_user.name }}</span>
+        <span class="settlement-arrow" aria-hidden="true">→</span>
+        <span class="settlement-person">{{ settlement.to_user.name }}</span>
+        <strong>{{ currency_symbol }}{{ '%.2f'|format(settlement.amount) }}</strong>
+        <span class="settlement-text">{{ settlement.from_user.name }} pays {{ settlement.to_user.name }}</span>
+        {% if current_user.id in [settlement.from_user.id, settlement.to_user.id] or is_admin %}
+        <form class="settlement-record-form" method="post" action="{{ url_for('settlement_records.record_payment', group_id=group.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="from_user_id" value="{{ settlement.from_user.id }}"><input type="hidden" name="to_user_id" value="{{ settlement.to_user.id }}"><input type="hidden" name="amount" value="{{ '%.2f'|format(settlement.amount) }}">
+          <button class="btn btn-sm" type="submit">{{ 'Confirm received' if current_user.id == settlement.to_user.id else 'I paid this' if current_user.id == settlement.from_user.id else 'Record payment' }}</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  {% else %}
+    <div class="settlement-complete">✓ Everyone is settled. No payments are required.</div>
+  {% endif %}
+</div>
+
+<div class="section-title" id="settlement-history">Settlement history</div>
+<div class="settlement-history">
+  {% if group.settlement_transactions %}
+    {% for transaction in group.settlement_transactions %}<article class="settlement-history-row settlement-{{ transaction.status }}">
+      <span class="settlement-history-icon">{{ '✓' if transaction.status == 'completed' else '◷' if transaction.status == 'pending' else '×' }}</span>
+      <div><strong>{{ transaction.from_user.name }} → {{ transaction.to_user.name }}</strong><span>{{ currency_symbol }}{{ '%.2f'|format(transaction.amount) }} · {{ transaction.status|title }}</span><small>Recorded by {{ transaction.created_by.name }} on {{ transaction.created_at.strftime('%d %b %Y · %H:%M') }}{% if transaction.confirmed_by %} · confirmed by {{ transaction.confirmed_by.name }}{% endif %}</small>{% if transaction.note %}<p>{{ transaction.note }}</p>{% endif %}</div>
+      <div class="settlement-history-actions">
+        {% if transaction.status == 'pending' and (current_user.id == transaction.to_user_id or is_admin) %}<form method="post" action="{{ url_for('settlement_records.confirm_payment', group_id=group.id, transaction_id=transaction.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Confirm</button></form><form method="post" action="{{ url_for('settlement_records.reject_payment', group_id=group.id, transaction_id=transaction.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm" type="submit">Reject</button></form>{% endif %}
+        {% if transaction.status == 'pending' and (current_user.id == transaction.created_by_id or is_admin) %}<form method="post" action="{{ url_for('settlement_records.cancel_payment', group_id=group.id, transaction_id=transaction.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit">Cancel</button></form>{% endif %}
+      </div>
+    </article>{% endfor %}
+  {% else %}<div class="settlement-history-empty">No settlement payments recorded yet.</div>{% endif %}
+</div>
+
 <div class="section-title expense-heading">
   <span>Expenses</span>
   <a class="btn btn-sm" href="{{ url_for('expenses.create_expense', group_id=group.id) }}">Add expense</a>
@@ -56,12 +148,18 @@
     <tr>
       <td><div class="name">{{ expense.title }}</div><span class="email">{{ expense.category }}{% if expense.notes %} · {{ expense.notes }}{% endif %}</span></td>
       <td>{{ expense.expense_date.strftime('%d %b %Y') }}</td>
-      <td>{{ expense.paid_by.name }}</td>
-      <td><strong>€{{ '%.2f'|format(expense.amount) }}</strong></td>
+      <td>
+        {% if expense.payments %}
+          {% for payment in expense.payments %}{{ payment.user.name }} {{ currency_symbol }}{{ '%.2f'|format(payment.amount) }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+        {% else %}
+          {{ expense.paid_by.name }}
+        {% endif %}
+      </td>
+      <td><strong>{{ currency_symbol }}{{ '%.2f'|format(expense.amount) }}</strong></td>
       <td class="actions">
         {% if expense.receipt_filename %}<a class="btn btn-ghost btn-sm" href="{{ url_for('expenses.receipt', group_id=group.id, expense_id=expense.id) }}">Receipt</a>{% endif %}
         <a class="btn btn-ghost btn-sm" href="{{ url_for('expenses.edit_expense', group_id=group.id, expense_id=expense.id) }}">Edit</a>
-        {% if expense.paid_by_id == current_user.id or is_admin %}
+        {% if expense.paid_by_id == current_user.id or current_user.id in expense.payments|map(attribute='user_id')|list or is_admin %}
         <form method="post" action="{{ url_for('expenses.delete_expense', group_id=group.id, expense_id=expense.id) }}" data-confirm="Delete this expense?">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-danger btn-sm" type="submit">Delete</button>
@@ -72,7 +170,56 @@
     <tr>
       <td colspan="5" class="split-summary">
         <strong>{{ expense.split_method|title }} split:</strong>
-        {% for split in expense.splits %}{{ split.user.name }} €{{ '%.2f'|format(split.amount) }}{% if not loop.last %} · {% endif %}{% endfor %}
+        {% for split in expense.splits %}{{ split.user.name }} {{ currency_symbol }}{{ '%.2f'|format(split.amount) }}{% if not loop.last %} · {% endif %}{% endfor %}
+        {% if expense.splits %}
+        <div class="contribution-chart" role="img" aria-label="Contribution chart for {{ expense.title }}">
+          <div class="contribution-title">Member contribution</div>
+          <div class="pie-and-legend">
+          <div class="contribution-pie-wrap">
+            <svg class="contribution-pie"
+                 viewBox="0 0 200 200"
+                 data-values="{% for split in expense.splits %}{{ split.amount }}{% if not loop.last %},{% endif %}{% endfor %}"
+                 role="img"
+                 aria-label="Pie chart showing each member's contribution to {{ expense.title }}">
+            </svg>
+          </div>
+          <table class="contribution-legend">
+            <thead>
+              <tr><th>Colour</th><th>Member</th><th>Amount</th><th>Percentage</th></tr>
+            </thead>
+            <tbody>
+            {% for split in expense.splits %}
+              {% set percentage = (split.amount / expense.amount * 100) %}
+              <tr>
+                <td><span class="chart-swatch chart-color-{{ loop.index0 % 5 }}" aria-label="Colour for {{ split.user.name }}"></span></td>
+                <td>{{ split.user.name }}</td>
+                <td>{{ currency_symbol }}{{ '%.2f'|format(split.amount) }}</td>
+                <td>{{ '%.1f'|format(percentage) }}%</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          </div>
+          {% for split in expense.splits %}
+            {% set percentage = (split.amount / expense.amount * 100) %}
+            <div class="contribution-row">
+              <div class="contribution-label">
+                <span>{{ split.user.name }}</span>
+                <span>{{ currency_symbol }}{{ '%.2f'|format(split.amount) }} · {{ '%.1f'|format(percentage) }}%</span>
+              </div>
+              <div class="contribution-track" aria-hidden="true">
+                <div class="contribution-bar chart-color-{{ loop.index0 % 5 }}" style="width: {{ '%.2f'|format(percentage) }}%"></div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if expense.receipt_items %}
+        <div class="saved-receipt-items">
+          <strong>Receipt item checklist</strong>
+          {% for item in expense.receipt_items %}<div><span>{{ item.name }}</span><span>{% for assignment in item.assignments %}{{ assignment.user.name }}{% if not loop.last %}, {% endif %}{% endfor %}</span><strong>{{ currency_symbol }}{{ '%.2f'|format(item.price) }}</strong></div>{% endfor %}
+        </div>
+        {% endif %}
       </td>
     </tr>
   {% endfor %}
@@ -168,4 +315,5 @@
 {% endfor %}
   </tbody>
 </table>
+<script src="{{ url_for('static', filename='js/contribution-chart.js') }}"></script>
 {% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ group.name }} payment reminders{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="{{ url_for('groups.dashboard') }}">Groups</a> / <a href="{{ url_for('groups.view_group', group_id=group.id) }}">{{ group.name }}</a> / Payment reminders</div>
+
+<header class="reminder-hero">
+  <div><span class="eyebrow">BALANCE FOLLOW-UP</span><h1>Payment reminders</h1><p>Send a friendly, balance-aware reminder now or schedule it for later.</p></div>
+  <div class="reminder-metrics"><div><strong>{{ pending }}</strong><span>Scheduled</span></div><div><strong>{{ sent }}</strong><span>Delivered</span></div></div>
+</header>
+
+<section class="reminder-layout">
+  <aside class="budget-panel reminder-compose">
+    <span class="eyebrow">NEW REMINDER</span><h2>Who needs a nudge?</h2>
+    {% if form.recipient_id.choices %}
+    <form method="post" action="{{ url_for('reminders.create_reminder', group_id=group.id) }}" novalidate>
+      {{ form.hidden_tag() }}{{ field(form.recipient_id) }}{{ field(form.amount, type="number") }}{{ field(form.timing) }}
+      <div id="custom-reminder-time">{{ field(form.scheduled_for) }}</div>{{ field(form.message, hint="This appears in the reminder email.") }}
+      <div class="reminder-content-preview"><strong>The reminder includes</strong><span>✓ Current amount owed</span><span>✓ Group name and sender</span><span>✓ Secure link to the settlement plan</span></div>
+      <button class="btn btn-block" type="submit">Create reminder</button>
+    </form>
+    {% else %}<div class="reminder-all-clear"><span>✓</span><strong>Everyone is settled</strong><p>A reminder can only target a member with a current negative balance.</p></div>{% endif %}
+  </aside>
+
+  <div class="reminder-content">
+    <section class="budget-panel">
+      <div class="panel-heading"><div><span class="eyebrow">DELIVERY LOG</span><h2>Reminder history</h2></div>{% if group.is_admin(current_user) %}<form method="post" action="{{ url_for('reminders.send_due', group_id=group.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit">Process due now</button></form>{% endif %}</div>
+      {% if reminders %}<div class="reminder-list">
+      {% for reminder in reminders %}<article class="reminder-row status-{{ reminder.status }}">
+        <div class="reminder-status-icon">{{ '✓' if reminder.status == 'sent' else '×' if reminder.status in ['cancelled','failed'] else '◷' }}</div>
+        <div class="reminder-main"><div><strong>{{ reminder.recipient.name }}</strong><span class="reminder-status">{{ reminder.status }}</span></div><span>{{ currency_symbol }}{{ '%.2f'|format(reminder.amount) }} · from {{ reminder.sender.name }}</span><small>Scheduled {{ reminder.scheduled_for|localtime }} {{ current_user.timezone }}{% if reminder.sent_at %} · sent {{ reminder.sent_at|localtime }}{% endif %}</small>{% if reminder.message %}<p>“{{ reminder.message }}”</p>{% endif %}{% if reminder.delivery_error %}<em>{{ reminder.delivery_error }}</em>{% endif %}</div>
+        <div class="reminder-meta"><a href="{{ reminder.payment_url }}">Payment link</a>{% if reminder.delivery_channel %}<span>{{ reminder.delivery_channel }}</span>{% endif %}
+          {% if reminder.status in ['scheduled','failed'] and (reminder.sender_id == current_user.id or group.is_admin(current_user)) %}<form method="post" action="{{ url_for('reminders.send_reminder', group_id=group.id, reminder_id=reminder.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Send now</button></form>{% endif %}
+          {% if reminder.status == 'scheduled' and (reminder.sender_id == current_user.id or group.is_admin(current_user)) %}<form method="post" action="{{ url_for('reminders.cancel_reminder', group_id=group.id, reminder_id=reminder.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm" type="submit">Cancel</button></form>{% endif %}
+        </div>
+      </article>{% endfor %}
+      </div>{% else %}<div class="reminder-empty"><span>◷</span><strong>No reminders yet</strong><p>Sent and scheduled reminders will be tracked here.</p></div>{% endif %}
+    </section>
+  </div>
+</section>
+
+<script>
+(() => {
+  const debts = {{ debts|tojson }};
+  const recipient = document.getElementById('recipient_id');
+  const amount = document.getElementById('amount');
+  const timing = document.getElementById('timing');
+  const custom = document.getElementById('custom-reminder-time');
+  const syncAmount = () => { if (recipient && amount && debts[recipient.value] !== undefined) amount.value = Number(debts[recipient.value]).toFixed(2); };
+  const syncTiming = () => { if (custom && timing) custom.hidden = timing.value !== 'custom'; };
+  if (recipient) { recipient.addEventListener('change', syncAmount); syncAmount(); }
+  if (timing) { timing.addEventListener('change', syncTiming); syncTiming(); }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Spending report{% endblock %}
+{% block body_class %}reports-theme{% endblock %}
+{% block content %}
+<section class="report-hero">
+  <div><span class="eyebrow">SPENDING ANALYTICS</span><h1>Your spending report</h1><p>See what you spent, where it went, and how it compares with your plan.</p></div>
+  <form class="report-filters" method="get">
+    <label>Month<input type="month" name="month" value="{{ month }}"></label>
+    <label>Scope<select name="scope">
+      <option value="all" {{ 'selected' if scope == 'all' }}>Everything</option>
+      <option value="personal" {{ 'selected' if scope == 'personal' }}>Personal + recurring</option>
+      {% for group in groups %}<option value="group:{{ group.id }}" {{ 'selected' if scope == 'group:' ~ group.id }}>{{ group.name }}</option>{% endfor %}
+    </select></label>
+    <label>Currency<select name="currency">{% for code in currencies %}<option value="{{ code }}" {{ 'selected' if currency == code }}>{{ code }}</option>{% endfor %}</select></label>
+    <button class="btn" type="submit">Update</button>
+  </form>
+</section>
+
+<section class="report-metrics" aria-label="Report summary">
+  <article><span>Total spent</span><strong>{{ currency_symbol }}{{ '%.2f'|format(report.total) }}</strong><small>From {{ report.count }} transaction{{ '' if report.count == 1 else 's' }}</small></article>
+  <article><span>Average transaction</span><strong>{{ currency_symbol }}{{ '%.2f'|format(report.average) }}</strong><small>Average recorded share or payment</small></article>
+  <article><span>Largest category</span><strong>{{ report.largest.name if report.largest else 'No spending' }}</strong><small>{% if report.largest %}{{ currency_symbol }}{{ '%.2f'|format(report.largest.amount) }} this month{% else %}Add expenses to see insights{% endif %}</small></article>
+  <article><span>Budget used</span><strong>{% if report.budget_percentage is not none %}{{ '%.0f'|format(report.budget_percentage) }}%{% else %}—{% endif %}</strong><small>{% if report.planned %}{{ currency_symbol }}{{ '%.2f'|format(report.total) }} of {{ currency_symbol }}{{ '%.2f'|format(report.planned) }}{% else %}No budget for this scope{% endif %}</small></article>
+</section>
+
+<div class="report-grid">
+  <section class="report-panel report-category-panel">
+    <div class="report-panel-head"><div><span class="eyebrow">BREAKDOWN</span><h2>Spending by category</h2></div><span class="report-total">{{ currency_symbol }}{{ '%.2f'|format(report.total) }}</span></div>
+    {% if report.categories %}
+    <div class="report-donut-layout">
+      <div class="report-donut-wrap">
+        <svg id="category-chart" class="report-donut" viewBox="0 0 220 220" role="img" aria-labelledby="category-chart-title category-chart-desc" data-series='{{ report.categories|tojson }}' data-currency="{{ currency_symbol }}">
+          <title id="category-chart-title">Spending by category</title><desc id="category-chart-desc">A donut chart of this month's spending. Focus or hover a segment for its amount.</desc>
+        </svg>
+        <div class="report-donut-center"><strong>{{ currency_symbol }}{{ '%.0f'|format(report.total) }}</strong><span>total</span></div>
+        <div class="report-tooltip" id="category-tooltip" role="status" aria-live="polite"></div>
+      </div>
+      <ul class="report-legend">{% for item in report.categories %}<li><span class="report-swatch series-{{ loop.index0 % 6 }}"></span><b>{{ item.name }}</b><span>{{ currency_symbol }}{{ '%.2f'|format(item.amount) }}</span><strong>{{ '%.0f'|format(item.percentage) }}%</strong></li>{% endfor %}</ul>
+    </div>
+    {% else %}<div class="report-empty"><span>◎</span><strong>No spending in this view</strong><p>Change the month or add an expense.</p></div>{% endif %}
+  </section>
+
+  <section class="report-panel">
+    <div class="report-panel-head"><div><span class="eyebrow">6-MONTH VIEW</span><h2>Monthly trend</h2><p>The selected month includes recurring bills; earlier months show only saved activity.</p></div></div>
+    <div class="trend-chart" id="trend-chart" data-series='{{ trend|tojson }}' data-currency="{{ currency_symbol }}" role="img" aria-label="Spending totals over the last six months"></div>
+  </section>
+</div>
+
+{% if report.usage %}
+<section class="report-panel budget-usage-panel">
+  <div class="report-panel-head"><div><span class="eyebrow">PLAN VS ACTUAL</span><h2>Budget usage</h2></div><a href="{{ url_for('budgets.monthly_budget', month=month) }}">Edit budget →</a></div>
+  <div class="usage-list">{% for item in report.usage %}<div class="usage-row"><div><strong>{{ item.name }}</strong><span>{{ currency_symbol }}{{ '%.2f'|format(item.actual) }} of {{ currency_symbol }}{{ '%.2f'|format(item.planned) }}</span></div><b class="{{ 'over' if item.percentage >= 100 else 'warning' if item.percentage >= 70 else '' }}">{{ '%.0f'|format(item.percentage) }}%</b><div class="usage-track"><i class="{{ 'over' if item.percentage >= 100 else 'warning' if item.percentage >= 70 else '' }}" style="width:{{ [item.percentage, 100]|min }}%"></i></div></div>{% endfor %}</div>
+</section>
+{% endif %}
+
+<section class="insights-section">
+  <div class="report-panel-head insights-heading"><div><span class="eyebrow">SPENDING INSIGHTS</span><h2>What your data is saying</h2><p>Generated only from the transactions included in this report.</p></div>{% if insights.has_data %}<span class="calculation-check {{ 'verified' if insights.verified else 'failed' }}">{{ '✓ Totals verified' if insights.verified else '! Check totals' }}</span>{% endif %}</div>
+  {% if insights.has_data %}
+  <div class="insights-grid">
+    <article class="report-panel insight-sources"><span class="eyebrow">DATA SOURCES</span><h3>What was counted</h3><ul>{% for source in insights.sources %}<li><div><strong>{{ source.name }}</strong><small>{{ source.count }} entr{{ 'y' if source.count == 1 else 'ies' }}</small></div><b>{{ currency_symbol }}{{ '%.2f'|format(source.amount) }}</b></li>{% endfor %}</ul><div class="source-check"><span>Source total</span><strong>{{ currency_symbol }}{{ '%.2f'|format(insights.source_total) }}</strong></div></article>
+    <article class="report-panel"><span class="eyebrow">KEY PATTERNS</span><h3>Trends found</h3><div class="insight-list">{% for item in insights.trends %}<div class="insight-item insight-{{ item.kind }}"><span>{{ '!' if item.kind == 'alert' else '↗' if item.kind == 'trend' else '◎' }}</span><div><strong>{{ item.title }}</strong><p>{{ item.detail }}</p></div></div>{% endfor %}</div></article>
+    <article class="report-panel"><span class="eyebrow">RECOMMENDED ACTIONS</span><h3>Possible next steps</h3><ol class="action-list">{% for item in insights.actions %}<li><span>{{ loop.index }}</span><div><strong>{{ item.title }}</strong><p>{{ item.detail }}</p></div></li>{% endfor %}</ol></article>
+  </div>
+  {% else %}<div class="report-panel insight-no-data"><span>◎</span><strong>Not enough saved data for insights</strong><p>Add a personal or group expense for this month. Recommendations will appear only after real transactions exist.</p></div>{% endif %}
+</section>
+
+<section class="report-panel report-transactions">
+  <div class="report-panel-head"><div><span class="eyebrow">AUDITABLE TOTAL</span><h2>Transactions included</h2><p>These rows add up exactly to {{ currency_symbol }}{{ '%.2f'|format(report.total) }}. Other currencies are shown separately.</p></div><div class="report-actions"><button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Print / PDF</button><a class="btn btn-sm" href="{{ url_for('reports.export_csv', month=month, scope=scope, currency=currency) }}">Export CSV</a></div></div>
+  {% if report.rows %}<div class="report-table-wrap"><table class="report-table"><thead><tr><th>Date</th><th>Description</th><th>Source</th><th>Category</th><th>Amount</th></tr></thead><tbody>{% for row in report.rows %}<tr><td>{{ row.date.strftime('%d %b') }}</td><td><strong>{{ row.description }}</strong>{% if row.group != '—' %}<small>{{ row.group }}</small>{% endif %}</td><td>{{ row.source }}</td><td>{{ row.category }}</td><td>{{ currency_symbol }}{{ '%.2f'|format(row.amount) }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="4">Verified total</td><td>{{ currency_symbol }}{{ '%.2f'|format(report.total) }}</td></tr></tfoot></table></div>{% else %}<div class="report-empty">No transactions to export.</div>{% endif %}
+</section>
+<script src="{{ url_for('static', filename='js/spending-report.js') }}"></script>
+{% endblock %}

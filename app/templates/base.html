@@ -6,17 +6,20 @@
   <title>{% block title %}WE_OWE{% endblock %} · WE_OWE</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header class="topbar">
     <a class="wordmark" href="{{ url_for('index') }}">we<span>owe</span></a>
     <nav>
       {% if current_user.is_authenticated %}
         <span class="who">{{ current_user.name }}</span>
-        <a href="{{ url_for('groups.dashboard') }}">Groups</a>
+        <a class="{{ 'nav-active' if request.blueprint in ['groups', 'expenses'] else '' }}" href="{{ url_for('groups.dashboard') }}">Groups</a>
+        <a class="{{ 'nav-active' if request.blueprint == 'budgets' else '' }}" href="{{ url_for('budgets.monthly_budget') }}">Budget</a>
+        <a class="{{ 'nav-active' if request.blueprint == 'reports' else '' }}" href="{{ url_for('reports.spending_report') }}">Reports</a>
+        <a class="{{ 'nav-active' if request.blueprint == 'settings' else '' }}" href="{{ url_for('settings.preferences') }}">Settings</a>
         <a class="ghost" href="{{ url_for('auth.logout') }}">Log out</a>
       {% else %}
-        <a href="{{ url_for('auth.login') }}">Log in</a>
-        <a class="ghost" href="{{ url_for('auth.register') }}">Sign up</a>
+        <a class="{{ 'nav-active' if request.endpoint == 'auth.login' else '' }}" href="{{ url_for('auth.login') }}">Log in</a>
+        <a class="ghost {{ 'nav-active' if request.endpoint == 'auth.register' else '' }}" href="{{ url_for('auth.register') }}">Sign up</a>
       {% endif %}
     </nav>
   </header>
@@ -35,7 +38,7 @@
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="foot">WE_OWE Student Budget Hub · Sprint 1</footer>
+  <footer class="foot"><span class="footer-mark">we<span>owe</span></span><span>Student money, made clearer.</span></footer>
   <script src="{{ url_for('static', filename='js/groups.js') }}"></script>
 </body>
 </html>

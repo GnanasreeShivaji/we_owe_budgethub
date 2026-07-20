@@ -4,17 +4,54 @@
 {% block content %}
 <div class="crumbs"><a href="{{ url_for('groups.view_group', group_id=group.id) }}">{{ group.name }}</a> / {{ 'Edit expense' if expense else 'Add expense' }}</div>
 <div class="card expense-form">
+  <span class="eyebrow">{{ 'UPDATE PAYMENT' if expense else 'NEW PAYMENT' }}</span>
   <h1>{{ 'Edit expense' if expense else 'Add an expense' }}</h1>
   <p class="sub">Record what was paid for this group.</p>
-  <form method="post" enctype="multipart/form-data" novalidate>
+  <form method="post" enctype="multipart/form-data" novalidate data-currency-symbol="{{ currency_symbol_for(group.currency) }}">
     {{ form.hidden_tag() }}
     {{ field(form.title) }}
     {{ field(form.amount, type="number") }}
+    {% if not expense and can_choose_currency %}
+      {{ field(form.currency, hint="This sets the currency for this group and its future expenses.") }}
+    {% else %}
+      <div class="field"><label>Currency</label><div class="currency-readonly">{{ group.currency }} · {{ currency_symbol_for(group.currency) }}</div><p class="hint">The group currency is locked after financial activity is recorded, so balances never mix currencies.</p></div>
+    {% endif %}
     {{ field(form.category) }}
     {{ field(form.expense_date) }}
     {{ field(form.notes) }}
     {{ field(form.receipt, hint="JPG, PNG, GIF, WebP or PDF; maximum 5 MB.") }}
+    {% if not expense %}
+    <div class="receipt-scan-actions">
+      <button class="btn btn-ghost" id="scan-receipt" type="button" data-scan-url="{{ url_for('expenses.scan_receipt', group_id=group.id) }}">Scan receipt into checklist</button>
+      <span id="receipt-scan-status" class="hint" aria-live="polite">Upload a receipt image, then scan it to fill the amount and products.</span>
+    </div>
+    <div id="receipt-checklist" class="receipt-checklist" hidden></div>
+    {% endif %}
     {% if expense and expense.receipt_filename %}<p class="hint">Current receipt: {{ expense.receipt_original_name }}</p>{% endif %}
+
+    <div class="split-panel payer-panel" id="payer-panel">
+      <h2>Who paid?</h2>
+      <p class="hint">Select one or more members. Their amounts must add up to the total expense.</p>
+      {% if next_payer %}<div class="payer-suggestion"><strong>Suggested next payer: {{ next_payer.user.name }}</strong><span>{{ next_payer.reason }}</span></div>{% endif %}
+      <div class="split-members">
+      {% for membership in memberships %}
+        {% set uid = membership.user_id %}
+        <div class="split-member">
+          <label class="check">
+            <input class="payer-check" type="checkbox" name="payer_{{ uid }}" value="1"
+                   {% if uid in payer_ids %}checked{% endif %}>
+            <span>{{ membership.user.name }}</span>
+          </label>
+          <input class="payment-value" type="number" min="0.01" step="0.01"
+                 name="payment_value_{{ uid }}"
+                 value="{{ payment_values.get('payment_value_' ~ uid, '') or '' }}"
+                 aria-label="Amount paid by {{ membership.user.name }}">
+          <span class="expense-currency-marker">{{ currency_symbol_for(group.currency) }}</span>
+        </div>
+      {% endfor %}
+      </div>
+      <div class="split-preview" id="payment-preview" aria-live="polite"></div>
+    </div>
 
     <div class="split-panel" id="split-panel">
       <h2>Split this expense</h2>
@@ -45,4 +82,6 @@
   </form>
 </div>
 <script src="{{ url_for('static', filename='js/expense-split.js') }}"></script>
+<script src="{{ url_for('static', filename='js/expense-payers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/receipt-checklist.js') }}"></script>
 {% endblock %}

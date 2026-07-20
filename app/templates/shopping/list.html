@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ group.name }} shopping list{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="{{ url_for('groups.dashboard') }}">Groups</a> / <a href="{{ url_for('groups.view_group', group_id=group.id) }}">{{ group.name }}</a> / Shopping list</div>
+
+<header class="shopping-hero">
+  <div><span class="eyebrow">COLLABORATIVE SHOPPING</span><h1>Shared shopping list</h1><p>Add what the group needs, decide who will buy it, and tick it off together.</p></div>
+  <div class="shopping-progress"><strong>{{ progress }}%</strong><span>{{ completed|length }} of {{ active|length + completed|length }} purchased</span><div><i style="width:{{ progress }}%"></i></div></div>
+</header>
+
+<section class="shopping-layout">
+  <aside class="budget-panel shopping-add-panel">
+    <span class="eyebrow">ADD AN ITEM</span><h2>What do you need?</h2>
+    <form method="post" action="{{ url_for('shopping.add_item', group_id=group.id) }}" novalidate>
+      {{ form.hidden_tag() }}{{ field(form.name) }}
+      <div class="shopping-form-pair">{{ field(form.quantity) }}{{ field(form.category) }}</div>
+      {{ field(form.assigned_to) }}{{ field(form.note) }}{{ field(form.price, type="number", hint="You can add this after purchase.") }}
+      <button class="btn btn-block" type="submit">Add to shared list</button>
+    </form>
+  </aside>
+
+  <div class="shopping-content">
+    <section class="budget-panel">
+      <div class="panel-heading"><div><span class="eyebrow">STILL NEEDED</span><h2>{{ active|length }} item{{ '' if active|length == 1 else 's' }} to buy</h2></div></div>
+      {% if active %}<div class="shopping-list">
+      {% for item in active %}<article class="shopping-row">
+        <form method="post" action="{{ url_for('shopping.toggle_item', group_id=group.id, item_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="shopping-check" type="submit" aria-label="Mark {{ item.name }} purchased"></button></form>
+        <div class="shopping-item-main"><strong>{{ item.name }}</strong><span><b>{{ item.quantity }}</b> · {{ item.category }}{% if item.note %} · {{ item.note }}{% endif %}</span><small>Added by {{ item.added_by.name }}{% if item.assigned_to %} · {{ item.assigned_to.name }} will buy{% else %} · anyone can buy{% endif %}</small></div>
+        <details class="shopping-edit"><summary>Edit</summary><form method="post" action="{{ url_for('shopping.edit_item', group_id=group.id, item_id=item.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>Item<input name="name" value="{{ item.name }}" maxlength="120" required></label><label>Quantity<input name="quantity" value="{{ item.quantity }}" maxlength="50" required></label>
+          <label>Category<select name="category">{% for value, label in form.category.choices %}<option value="{{ value }}" {% if value == item.category %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+          <label>Who should buy it?<select name="assigned_to">{% for value, label in member_choices %}<option value="{{ value }}" {% if value == (item.assigned_to_id or 0) %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+          <label>Note<input name="note" value="{{ item.note }}" maxlength="240"></label><label>Price<input name="price" type="number" min="0.01" step="0.01" value="{{ item.price or '' }}"></label><button class="btn btn-sm" type="submit">Save item</button>
+        </form></details>
+        {% if item.added_by_id == current_user.id or is_admin %}<form method="post" action="{{ url_for('shopping.delete_item', group_id=group.id, item_id=item.id) }}" data-confirm="Remove '{{ item.name }}' from the shopping list?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="icon-delete" type="submit" aria-label="Delete {{ item.name }}">×</button></form>{% endif %}
+      </article>{% endfor %}
+      </div>{% else %}<div class="shopping-empty"><span>✓</span><strong>Nothing left to buy</strong><p>Add an item or enjoy the empty list.</p></div>{% endif %}
+    </section>
+
+    {% if completed %}<section class="budget-panel completed-panel">
+      <div class="panel-heading"><div><span class="eyebrow">DONE</span><h2>Purchased items</h2></div><div class="rowactions">{% if convertible %}<form method="post" action="{{ url_for('shopping.completed_to_expense', group_id=group.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Create expense · {{ currency_symbol_for(group.currency) }}{{ '%.2f'|format(convertible|sum(attribute='price')) }}</button></form>{% endif %}<form method="post" action="{{ url_for('shopping.clear_completed', group_id=group.id) }}" data-confirm="Clear all purchased items?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-ghost btn-sm" type="submit">Clear completed</button></form></div></div>
+      <div class="shopping-list">{% for item in completed %}<article class="shopping-row shopping-row-done">
+        <form method="post" action="{{ url_for('shopping.toggle_item', group_id=group.id, item_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="shopping-check checked" type="submit" aria-label="Mark {{ item.name }} needed">✓</button></form>
+        <div class="shopping-item-main"><strong>{{ item.name }}</strong><span>{{ item.quantity }} · {{ item.category }}{% if item.price %} · {{ currency_symbol_for(group.currency) }}{{ '%.2f'|format(item.price) }}{% endif %}</span><small>Purchased by {{ item.purchased_by.name if item.purchased_by else 'a group member' }}{% if item.converted_expense %} · expense created{% endif %}</small></div>
+      </article>{% endfor %}</div>
+    </section>{% endif %}
+  </div>
+</section>
+{% endblock %}
